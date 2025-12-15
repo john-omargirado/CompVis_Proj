@@ -55,7 +55,7 @@ DriverDrowsyApp/
 │
 ├── app_drowsiness.py          # Main application for real-time detection
 ├── train_yolov8.py            # Training script for custom model
-├── requirements.txxt.txt      # Python dependencies
+├── requirements.txt      # Python dependencies
 ├── best.pt                    # Pre-trained model weights (backup)
 ├── yolov8n.pt                 # YOLOv8 nano base model
 │
@@ -393,3 +393,4 @@ For questions, issues, or contributions, please open an issue in the repository 
 ---
 
 *Last Updated: December 2025*
+
