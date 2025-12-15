@@ -1,6 +1,6 @@
 # DriverDrowsyApp
 
-A real-time driver drowsiness detection system using YOLOv8 and computer vision to enhance road safety by alerting drivers when signs of drowsiness are detected.
+A real-time driver drowsiness detection system using YOLOv8 for face localization combined with MediaPipe Face Mesh for advanced feature-based temporal analysis. The system uses Eye Aspect Ratio (EAR), Mouth Aspect Ratio (MAR), and PERCLOS metrics with personalized calibration to accurately detect driver fatigue.
 
 ---
 
@@ -8,13 +8,14 @@ A real-time driver drowsiness detection system using YOLOv8 and computer vision 
 
 - [Overview](#overview)
 - [Features](#features)
+- [How It Works](#how-it-works)
 - [Project Structure](#project-structure)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Usage](#usage)
   - [Running the Detection Application](#running-the-detection-application)
+  - [Calibration Process](#calibration-process)
   - [Training Your Own Model](#training-your-own-model)
-- [Model Performance](#model-performance)
 - [Configuration](#configuration)
 - [Technical Details](#technical-details)
 - [Troubleshooting](#troubleshooting)
@@ -24,7 +25,14 @@ A real-time driver drowsiness detection system using YOLOv8 and computer vision 
 
 ## Overview
 
-**DriverDrowsyApp** is a computer vision application designed to detect driver drowsiness in real-time using a webcam feed. The system leverages the power of YOLOv8 (You Only Look Once version 8) object detection model to identify visual signs of drowsiness in drivers and provides immediate visual alerts.
+**DriverDrowsyApp** is an advanced computer vision application designed to detect driver drowsiness in real-time using a webcam feed. Unlike simple classification approaches, this system employs a **feature-based temporal analysis pipeline**:
+
+1. **YOLOv8** localizes the driver's face
+2. **MediaPipe Face Mesh** extracts 468 facial landmarks
+3. **EAR (Eye Aspect Ratio)** monitors eye openness
+4. **MAR (Mouth Aspect Ratio)** detects yawning
+5. **PERCLOS** tracks percentage of eye closure over time
+6. **Dynamic Calibration** personalizes thresholds for each user
 
 The application is particularly useful for:
 - Fleet management systems
@@ -36,15 +44,57 @@ The application is particularly useful for:
 
 ## Features
 
+- **Feature-Based Detection**: Uses EAR, MAR, and PERCLOS instead of simple classification
+- **Dynamic Calibration**: 3-second startup calibration personalizes thresholds to your face
 - **Real-time Detection**: Processes live webcam feed with minimal latency
-- **Visual Alerts**: Displays prominent "DROWSY!" warning when drowsiness is detected
-- **Bounding Box Visualization**: Shows detection regions with confidence scores
+- **Visual Alerts**: Displays prominent "DROWSY!" warning when fatigue is detected
+- **Comprehensive Metrics Display**:
+  - EAR (Eye Aspect Ratio) with threshold
+  - MAR (Mouth Aspect Ratio) with threshold
+  - PERCLOS percentage
+  - Blink counter
+  - Yawn counter
+  - Calibrated baseline values
 - **Color-coded Indicators**: 
   - 🟢 Green: Normal/Alert state
   - 🔴 Red: Drowsy state detected
-- **Configurable Confidence Threshold**: Adjustable sensitivity for detection
+  - 🟡 Yellow: Calibrating
+- **Temporal Analysis**: Tracks patterns over 30-second sliding window
 - **GPU Acceleration**: Supports CUDA-enabled GPUs for faster inference
-- **Pre-trained Model**: Includes a trained model ready for immediate use
+
+---
+
+## How It Works
+
+### Detection Pipeline
+
+```
+┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
+│   Webcam    │───▶│   YOLOv8     │───▶│  MediaPipe      │
+│   Frame     │    │ Face Detect  │    │  Face Mesh      │
+└─────────────┘    └──────────────┘    └─────────────────┘
+                                              │
+                                              ▼
+┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
+│  Fatigue    │◀───│   Temporal   │◀───│  EAR & MAR      │
+│  Decision   │    │   Analysis   │    │  Calculation    │
+└─────────────┘    └──────────────┘    └─────────────────┘
+```
+
+### Key Metrics
+
+| Metric | Description | Formula |
+|--------|-------------|---------|
+| **EAR** | Eye Aspect Ratio - measures eye openness | `(||P2-P6|| + ||P3-P5||) / (2 × ||P1-P4||)` |
+| **MAR** | Mouth Aspect Ratio - detects yawning | `(vertical distances) / (horizontal distance)` |
+| **PERCLOS** | Percentage of Eye Closure - tracks fatigue over time | `(closed frames / total frames) × 100` |
+
+### Fatigue Detection Criteria
+
+The system triggers a **DROWSY** alert when ANY of these conditions are met:
+- **PERCLOS > 35%**: Eyes closed more than 35% of the time over 30 seconds
+- **Prolonged Eye Closure**: Eyes closed for 15+ consecutive frames
+- **Active Yawning**: Mouth open (MAR > 0.55) for 15+ consecutive frames
 
 ---
 
@@ -55,7 +105,7 @@ DriverDrowsyApp/
 │
 ├── app_drowsiness.py          # Main application for real-time detection
 ├── train_yolov8.py            # Training script for custom model
-├── requirements.txt      # Python dependencies
+├── requirements.txxt.txt      # Python dependencies
 ├── best.pt                    # Pre-trained model weights (backup)
 ├── yolov8n.pt                 # YOLOv8 nano base model
 │
@@ -78,7 +128,7 @@ DriverDrowsyApp/
 ### System Requirements
 
 - **Operating System**: Windows 10/11, Linux, or macOS
-- **Python**: 3.8 or higher
+- **Python**: 3.8 - 3.12 (MediaPipe requires Python ≤3.12)
 - **Webcam**: Built-in or external USB camera
 - **GPU** (Optional but recommended): NVIDIA GPU with CUDA support
 
@@ -87,11 +137,15 @@ DriverDrowsyApp/
 | Package | Version | Description |
 |---------|---------|-------------|
 | ultralytics | ≥8.3.237 | YOLOv8 framework |
+| mediapipe | ≥0.10.9 | Face mesh landmark detection |
+| scipy | ≥1.11.0 | Distance calculations for EAR/MAR |
 | torch | ≥2.1.0 | PyTorch deep learning library |
 | torchvision | ≥0.16.0 | Computer vision utilities |
 | opencv-python | ≥4.7.0 | Image processing library |
 | numpy | ≥1.25.0 | Numerical computing |
 | tqdm | ≥4.65.0 | Progress bar utilities |
+
+> ⚠️ **Note**: MediaPipe does not support Python 3.13+. Use Python 3.12 or earlier.
 
 ---
 
@@ -129,6 +183,8 @@ pip install -r requirements.txxt.txt
 
 # Or install individually
 pip install ultralytics>=8.3.237
+pip install mediapipe>=0.10.9
+pip install scipy>=1.11.0
 pip install torch torchvision torchaudio
 pip install opencv-python>=4.7.0
 pip install numpy>=1.25.0
@@ -164,11 +220,42 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 3. **Using the Application**
    - The webcam feed will open in a new window
-   - Position yourself in front of the camera
-   - The system will automatically detect and classify your state
-   - **Green bounding box**: Normal/Alert state
-   - **Red bounding box + "DROWSY!" text**: Drowsiness detected
+   - **CALIBRATION PHASE** (first 3 seconds):
+     - Keep your eyes **WIDE OPEN** and look at the camera
+     - A progress bar will show calibration status
+     - The system calculates your personal EAR baseline
+   - **DETECTION PHASE** (after calibration):
+     - The system monitors your eyes and mouth in real-time
+     - Metrics panel shows EAR, MAR, PERCLOS, blinks, and yawns
+     - **Green bounding box**: Normal/Alert state
+     - **Red bounding box + "DROWSY!" text**: Fatigue detected
    - Press **'q'** to quit the application
+
+### Calibration Process
+
+The calibration phase is crucial for accurate detection:
+
+1. **Why Calibration?**
+   - Everyone's eyes have different natural EAR values
+   - Generic thresholds cause false positives for some users
+   - Calibration creates personalized thresholds
+
+2. **During Calibration (3 seconds)**
+   - Keep eyes naturally open (don't force them wide)
+   - Look directly at the camera
+   - Avoid blinking if possible
+   - Stay still
+
+3. **What Happens**
+   - System measures your average EAR over 90 frames
+   - Calculates your `OPEN_EAR_BASELINE`
+   - Sets `EYE_AR_THRESH = BASELINE × 0.78`
+   - This means eyes are "closed" when EAR drops below 78% of your normal
+
+4. **After Calibration**
+   - Your personalized baseline is displayed
+   - Detection becomes active with calibrated thresholds
+   - Metrics panel shows current values vs thresholds
 
 ### Training Your Own Model
 
@@ -250,8 +337,31 @@ WINDOW_WIDTH = 640                    # Window width in pixels
 WINDOW_HEIGHT = 480                   # Window height in pixels
 
 # Detection Settings
-CONFIDENCE_THRESHOLD = 0.5            # Minimum confidence for detection (0.0-1.0)
+CONFIDENCE_THRESHOLD = 0.5            # Minimum confidence for face detection (0.0-1.0)
+
+# Feature-Based Thresholds
+EYE_AR_THRESH = 0.25                  # Initial EAR threshold (calibrated dynamically)
+EYE_AR_CONSEC_FRAMES = 15             # Frames for sustained eye closure
+MAR_THRESH = 0.55                     # Mouth aspect ratio for yawn detection
+MAR_CONSEC_FRAMES = 15                # Frames for sustained yawn
+PERCLOS_WINDOW_SIZE = 900             # Sliding window (30 sec at 30 FPS)
+PERCLOS_THRESH = 35.0                 # PERCLOS percentage threshold
+
+# Calibration Settings
+CALIBRATION_FRAMES_TOTAL = 90         # Calibration duration (~3 sec at 30 FPS)
 ```
+
+### Tuning Thresholds
+
+If you experience issues, adjust these values:
+
+| Issue | Solution |
+|-------|----------|
+| Too many false positives | Increase `PERCLOS_THRESH` (e.g., 40-50%) |
+| Missing real drowsiness | Decrease `PERCLOS_THRESH` (e.g., 25-30%) |
+| Yawn detection too sensitive | Increase `MAR_THRESH` (e.g., 0.6-0.7) |
+| Not detecting yawns | Decrease `MAR_THRESH` (e.g., 0.4-0.5) |
+| Calibration too short | Increase `CALIBRATION_FRAMES_TOTAL` |
 
 ### Training Settings (`train_yolov8.py`)
 
@@ -274,12 +384,55 @@ RUN_NAME = "drowsiness_model_v8"      # Name for this training run
 
 ## Technical Details
 
-### Model Architecture
+### Detection Architecture
 
-- **Base Model**: YOLOv8n (nano) - lightweight and fast
-- **Task**: Object Detection
-- **Input Size**: 640×640 pixels
-- **Classes**: Drowsy, Normal (presumed based on detection logic)
+The system uses a two-stage approach:
+
+1. **Stage 1: Face Localization (YOLOv8)**
+   - Model: YOLOv8n (nano) - lightweight and fast
+   - Task: Face/object detection
+   - Input Size: 640×640 pixels
+   - Output: Bounding box coordinates
+
+2. **Stage 2: Landmark Detection (MediaPipe)**
+   - Model: MediaPipe Face Mesh
+   - Landmarks: 468 facial points
+   - Key landmarks used:
+     - Left Eye: indices [362, 385, 387, 263, 373, 380]
+     - Right Eye: indices [33, 160, 158, 133, 153, 144]
+     - Mouth: indices [61, 291, 39, 181, 0, 17, 269, 405]
+
+### EAR Calculation
+
+The Eye Aspect Ratio is calculated using 6 landmarks per eye:
+
+```
+       P2    P3
+        \  /
+    P1 -------- P4
+        /  \
+       P6    P5
+
+EAR = (||P2-P6|| + ||P3-P5||) / (2 × ||P1-P4||)
+```
+
+- **High EAR** (~0.3-0.4): Eyes open
+- **Low EAR** (<0.2): Eyes closed
+- **Calibrated threshold**: 78% of your personal baseline
+
+### PERCLOS Algorithm
+
+PERCLOS (Percentage of Eye Closure) is a validated fatigue metric:
+
+```python
+PERCLOS = (frames_with_eyes_closed / total_frames_in_window) × 100
+```
+
+- Window size: 900 frames (~30 seconds at 30 FPS)
+- Uses a sliding window (deque) for efficiency
+- Threshold: 35% (eyes closed >35% of time = fatigued)
+
+### Model Architecture (YOLOv8)
 
 ### Training Configuration
 
@@ -335,26 +488,58 @@ The model was trained with standard YOLOv8 augmentations:
 - Ensure `best.pt` exists in the specified directory
 - Use absolute paths to avoid path issues
 
-#### 3. CUDA/GPU Errors
+#### 3. MediaPipe Installation Error (Python 3.13+)
+
+```
+ERROR: No matching distribution found for mediapipe
+```
+
+**Solutions:**
+- MediaPipe requires Python 3.8-3.12
+- Install Python 3.12: `winget install Python.Python.3.12`
+- Create a new virtual environment with Python 3.12:
+  ```bash
+  py -3.12 -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  pip install mediapipe scipy ultralytics opencv-python
+  ```
+
+#### 4. Constant False Positives (Always shows DROWSY)
+
+**Solutions:**
+- Ensure you keep eyes **OPEN** during calibration
+- Check lighting conditions (low light affects EAR calculation)
+- Increase `PERCLOS_THRESH` to 40-50%
+- The calibration baseline may be too low - restart the app
+
+#### 5. Not Detecting Drowsiness
+
+**Solutions:**
+- Check if calibration completed successfully
+- Decrease `PERCLOS_THRESH` to 25-30%
+- Ensure face is clearly visible and well-lit
+- Check the EAR values in the metrics panel
+
+#### 6. CUDA/GPU Errors
 
 **Solutions:**
 - Verify NVIDIA drivers are installed
 - Check CUDA version compatibility with PyTorch
 - Fall back to CPU: The application will automatically use CPU if GPU is unavailable
 
-#### 4. Slow Performance
+#### 7. Slow Performance
 
 **Solutions:**
 - Enable GPU acceleration if available
 - Reduce `WINDOW_WIDTH` and `WINDOW_HEIGHT`
 - Increase `CONFIDENCE_THRESHOLD` to filter more detections
 
-#### 5. Import Errors
+#### 8. Import Errors
 
 **Solutions:**
 - Ensure all dependencies are installed: `pip install -r requirements.txxt.txt`
-- Check Python version compatibility (3.8+)
-- Reinstall ultralytics: `pip install --upgrade ultralytics`
+- Check Python version compatibility (3.8-3.12)
+- Reinstall packages: `pip install --upgrade mediapipe scipy ultralytics`
 
 ---
 
@@ -369,6 +554,9 @@ Potential enhancements for the project:
 - [ ] Support for multiple cameras
 - [ ] Driver identification features
 - [ ] Cloud-based monitoring dashboard
+- [ ] Head pose estimation for distraction detection
+- [ ] Configurable calibration duration
+- [ ] Save/load calibration profiles
 
 ---
 
@@ -381,8 +569,17 @@ This project is provided for educational and research purposes. Please ensure co
 ## Acknowledgments
 
 - [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) - Object detection framework
+- [MediaPipe](https://mediapipe.dev/) - Face mesh landmark detection
 - [OpenCV](https://opencv.org/) - Computer vision library
 - [PyTorch](https://pytorch.org/) - Deep learning framework
+- [SciPy](https://scipy.org/) - Scientific computing library
+
+---
+
+## References
+
+- Soukupová, T., & Čech, J. (2016). "Real-Time Eye Blink Detection using Facial Landmarks"
+- PERCLOS metric: Dinges, D. F., & Grace, R. (1998). "PERCLOS: A valid psychophysiological measure of alertness"
 
 ---
 
@@ -393,4 +590,3 @@ For questions, issues, or contributions, please open an issue in the repository 
 ---
 
 *Last Updated: December 2025*
-
