@@ -85,7 +85,7 @@ The application is particularly useful for:
 
 | Metric | Description | Formula |
 |--------|-------------|---------|
-| **EAR** | Eye Aspect Ratio - measures eye openness | `(||P2-P6|| + ||P3-P5||) / (2 × ||P1-P4||)` |
+| **EAR** | Eye Aspect Ratio - measures eye openness | `(‖P2-P6‖ + ‖P3-P5‖) / (2 × ‖P1-P4‖)` |
 | **MAR** | Mouth Aspect Ratio - detects yawning | `(vertical distances) / (horizontal distance)` |
 | **PERCLOS** | Percentage of Eye Closure - tracks fatigue over time | `(closed frames / total frames) × 100` |
 
