@@ -46,15 +46,18 @@ The application is particularly useful for:
 
 - **Feature-Based Detection**: Uses EAR, MAR, and PERCLOS instead of simple classification
 - **Dynamic Calibration**: 3-second startup calibration personalizes thresholds to your face
+- **Head Pose Estimation**: PnP algorithm detects head drooping (nodding off)
+- **Yawn Rate Monitoring**: Tracks yawns per minute over a 3-minute window
+- **Event Logging**: Timestamped log of blinks, yawns, droops, and fatigue events
 - **Real-time Detection**: Processes live webcam feed with minimal latency
 - **Visual Alerts**: Displays prominent "DROWSY!" warning when fatigue is detected
-- **Comprehensive Metrics Display**:
+- **Compact Metrics Panel**: Streamlined on-screen display showing:
   - EAR (Eye Aspect Ratio) with threshold
   - MAR (Mouth Aspect Ratio) with threshold
   - PERCLOS percentage
-  - Blink counter
-  - Yawn counter
-  - Calibrated baseline values
+  - Head pitch angle
+  - Blink & yawn counters
+  - Yawn rate (per minute)
 - **Color-coded Indicators**: 
   - 🟢 Green: Normal/Alert state
   - 🔴 Red: Drowsy state detected
@@ -87,14 +90,25 @@ The application is particularly useful for:
 |--------|-------------|---------|
 | **EAR** | Eye Aspect Ratio - measures eye openness | `(‖P2-P6‖ + ‖P3-P5‖) / (2 × ‖P1-P4‖)` |
 | **MAR** | Mouth Aspect Ratio - detects yawning | `(vertical distances) / (horizontal distance)` |
-| **PERCLOS** | Percentage of Eye Closure - tracks fatigue over time | `(closed frames / total frames) × 100` |
-
+| **PERCLOS** | Percentage of Eye Closure - tracks fatigue over time | `(closed frames / total frames) × 100` || **Pitch** | Head tilt angle - detects drooping | `cv2.solvePnP()` with 6 facial landmarks |
+| **Yawn Rate** | Yawns per minute over 3-min window | `yawn_count / elapsed_minutes` |
 ### Fatigue Detection Criteria
 
 The system triggers a **DROWSY** alert when ANY of these conditions are met:
-- **PERCLOS > 35%**: Eyes closed more than 35% of the time over 30 seconds
-- **Prolonged Eye Closure**: Eyes closed for 15+ consecutive frames
-- **Active Yawning**: Mouth open (MAR > 0.55) for 15+ consecutive frames
+- **PERCLOS > 40%**: Eyes closed more than 40% of the time over 30 seconds
+- **Prolonged Eye Closure**: Eyes closed for 25+ consecutive frames
+- **Head Drooping**: Head pitch below -10° for 90+ consecutive frames (3 seconds)
+- **High Yawn Rate**: 1 or more yawns per minute over a 3-minute window
+
+### Event Logging
+
+The system maintains a detailed event log with timestamps for:
+- **BLINK**: Each detected blink
+- **YAWN_START / YAWN_END**: Yawn duration tracking
+- **DROOP_START / DROOP_END**: Head droop episodes
+- **FATIGUE_START / FATIGUE_END**: Fatigue state changes
+
+When you quit (press 'q'), a summary of all events is printed to the console.
 
 ---
 
@@ -341,11 +355,19 @@ CONFIDENCE_THRESHOLD = 0.5            # Minimum confidence for face detection (0
 
 # Feature-Based Thresholds
 EYE_AR_THRESH = 0.25                  # Initial EAR threshold (calibrated dynamically)
-EYE_AR_CONSEC_FRAMES = 15             # Frames for sustained eye closure
+EYE_AR_CONSEC_FRAMES = 25             # Frames for sustained eye closure
 MAR_THRESH = 0.55                     # Mouth aspect ratio for yawn detection
 MAR_CONSEC_FRAMES = 15                # Frames for sustained yawn
 PERCLOS_WINDOW_SIZE = 900             # Sliding window (30 sec at 30 FPS)
-PERCLOS_THRESH = 35.0                 # PERCLOS percentage threshold
+PERCLOS_THRESH = 40.0                 # PERCLOS percentage threshold
+
+# Head Pose Settings
+PITCH_THRESH = -10.0                  # Pitch angle threshold (negative = head down)
+DROOP_CONSEC_FRAMES = 90              # Frames for head droop (~3 sec at 30 FPS)
+
+# Yawn Rate Settings
+YAWN_RATE_WINDOW = 180.0              # 3-minute window for yawn rate calculation
+YAWN_RATE_THRESH = 1.0                # Yawns per minute threshold
 
 # Calibration Settings
 CALIBRATION_FRAMES_TOTAL = 90         # Calibration duration (~3 sec at 30 FPS)
@@ -357,10 +379,13 @@ If you experience issues, adjust these values:
 
 | Issue | Solution |
 |-------|----------|
-| Too many false positives | Increase `PERCLOS_THRESH` (e.g., 40-50%) |
-| Missing real drowsiness | Decrease `PERCLOS_THRESH` (e.g., 25-30%) |
+| Too many false positives | Increase `PERCLOS_THRESH` (e.g., 45-55%) |
+| Missing real drowsiness | Decrease `PERCLOS_THRESH` (e.g., 30-35%) |
 | Yawn detection too sensitive | Increase `MAR_THRESH` (e.g., 0.6-0.7) |
 | Not detecting yawns | Decrease `MAR_THRESH` (e.g., 0.4-0.5) |
+| Head droop too sensitive | Decrease `PITCH_THRESH` (e.g., -15°) |
+| Not detecting head droop | Increase `PITCH_THRESH` (e.g., -5°) |
+| Yawn rate too sensitive | Increase `YAWN_RATE_THRESH` (e.g., 1.5-2.0) |
 | Calibration too short | Increase `CALIBRATION_FRAMES_TOTAL` |
 
 ### Training Settings (`train_yolov8.py`)
@@ -430,7 +455,35 @@ PERCLOS = (frames_with_eyes_closed / total_frames_in_window) × 100
 
 - Window size: 900 frames (~30 seconds at 30 FPS)
 - Uses a sliding window (deque) for efficiency
-- Threshold: 35% (eyes closed >35% of time = fatigued)
+- Threshold: 40% (eyes closed >40% of time = fatigued)
+
+### Head Pose Estimation
+
+The system uses the PnP (Perspective-n-Point) algorithm to estimate head orientation:
+
+```python
+# 6 key facial landmarks used:
+# Nose tip, Chin, Left eye corner, Right eye corner, 
+# Left mouth corner, Right mouth corner
+
+success, rvec, tvec = cv2.solvePnP(model_points, image_points, camera_matrix, dist_coeffs)
+pitch = rotation_matrix[2, 0]  # Vertical head tilt
+```
+
+- **Pitch < 0**: Head tilted down (nodding off)
+- **Threshold**: -10° sustained for 3 seconds triggers droop detection
+- Works independently of eye detection for redundant fatigue monitoring
+
+### Yawn Rate Calculation
+
+Tracks frequency of yawns over a sliding 3-minute window:
+
+```python
+yawn_rate = yawn_count_in_window / elapsed_minutes
+```
+
+- Frequent yawning (≥1/min) indicates fatigue even with eyes open
+- Uses timestamped yawn events for accurate rate calculation
 
 ### Model Architecture (YOLOv8)
 
@@ -548,15 +601,18 @@ ERROR: No matching distribution found for mediapipe
 Potential enhancements for the project:
 
 - [ ] Audio alerts for drowsiness detection
-- [ ] Logging and statistics tracking
+- [x] ~~Logging and statistics tracking~~ ✅ Implemented (Event Log)
 - [ ] Integration with vehicle systems
 - [ ] Mobile application version
 - [ ] Support for multiple cameras
 - [ ] Driver identification features
 - [ ] Cloud-based monitoring dashboard
-- [ ] Head pose estimation for distraction detection
-- [ ] Configurable calibration duration
+- [x] ~~Head pose estimation for distraction detection~~ ✅ Implemented (PnP Algorithm)
+- [ ] Configurable calibration duration via UI
 - [ ] Save/load calibration profiles
+- [ ] Export event log to CSV/JSON file
+- [ ] Real-time fatigue score calculation
+- [ ] Distraction detection (looking away from road)
 
 ---
 
