@@ -98,7 +98,7 @@ The system triggers a **DROWSY** alert when ANY of these conditions are met:
 - **PERCLOS > 40%**: Eyes closed more than 40% of the time over 30 seconds
 - **Prolonged Eye Closure**: Eyes closed for 25+ consecutive frames
 - **Head Drooping**: Head pitch below -10° for 90+ consecutive frames (3 seconds)
-- **High Yawn Rate**: 1 or more yawns per minute over a 3-minute window
+- **High Yawn Rate**: 5 or more yawns per minute over a 3-minute window
 
 ### Event Logging
 
@@ -356,8 +356,8 @@ CONFIDENCE_THRESHOLD = 0.5            # Minimum confidence for face detection (0
 # Feature-Based Thresholds
 EYE_AR_THRESH = 0.25                  # Initial EAR threshold (calibrated dynamically)
 EYE_AR_CONSEC_FRAMES = 25             # Frames for sustained eye closure
-MAR_THRESH = 0.55                     # Mouth aspect ratio for yawn detection
-MAR_CONSEC_FRAMES = 15                # Frames for sustained yawn
+MAR_THRESH = 0.45                     # Mouth aspect ratio for yawn detection (optimized)
+MAR_CONSEC_FRAMES = 10                # Frames for sustained yawn (faster detection)
 PERCLOS_WINDOW_SIZE = 900             # Sliding window (30 sec at 30 FPS)
 PERCLOS_THRESH = 40.0                 # PERCLOS percentage threshold
 
@@ -367,7 +367,7 @@ DROOP_CONSEC_FRAMES = 90              # Frames for head droop (~3 sec at 30 FPS)
 
 # Yawn Rate Settings
 YAWN_RATE_WINDOW = 180.0              # 3-minute window for yawn rate calculation
-YAWN_RATE_THRESH = 1.0                # Yawns per minute threshold
+YAWN_RATE_THRESH = 5.0                # Yawns per minute threshold (optimized)
 
 # Calibration Settings
 CALIBRATION_FRAMES_TOTAL = 90         # Calibration duration (~3 sec at 30 FPS)
